@@ -23,12 +23,12 @@ workers:
   n_workers: 2             # số luồng chạy song song
 
 rate_limit:
-  min_delay_sec: 2         # nghỉ ngẫu nhiên [min, max] giây sau mỗi request
-  max_delay_sec: 4
+  min_delay_sec: 3         # nghỉ ngẫu nhiên [min, max] giây sau mỗi request
+  max_delay_sec: 5
   max_requests_per_minute: 15   # tối đa request/phút, toàn cục (mọi batch, mọi job)
   max_concurrent_requests: 2    # tối đa request gần như đồng thời, toàn cục
 
 request:
-  timeout_sec: 8
+  timeout_sec: 15
   retries: 2               # số lần thử lại khi lỗi
   impersonate: chrome120

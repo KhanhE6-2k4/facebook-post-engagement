@@ -7,21 +7,25 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from scraper.config import CONFIG
+from scraper.fb import proxy_url
 from scraper.runner import parse_score_formula, run_job
 from scraper.sheets import parse_sheet_url
 
 load_dotenv()  # nạp .env (nếu có) vào os.environ; không ghi đè biến đã đặt sẵn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.info("FB proxy: %s", "đã cấu hình" if proxy_url() else "chưa cấu hình (FB_PROXY_URL trống)")
+
+PROXY_UNSUPPORTED = "Hiện tại proxy chưa được hỗ trợ"
 
 app = Flask(__name__)
 jobs = {}
 
 
-def _worker(job_id, sheet_url, formula):
+def _worker(job_id, sheet_url, formula, use_proxy):
   job = jobs[job_id]
   try:
-    run_job(sheet_url, formula, job)
+    run_job(sheet_url, formula, use_proxy, job)
     job["status"] = "done"
   except Exception as e:
     logging.exception("Job %s lỗi", job_id)
@@ -31,7 +35,8 @@ def _worker(job_id, sheet_url, formula):
 
 @app.get("/")
 def index():
-  return render_template("index.html", score=CONFIG["score"])
+  return render_template("index.html", score=CONFIG["score"],
+                         proxy_available=bool(proxy_url()), proxy_unsupported=PROXY_UNSUPPORTED)
 
 
 @app.post("/api/run")
@@ -43,10 +48,13 @@ def run():
     formula = parse_score_formula(data.get("formula"))
   except ValueError as e:
     return jsonify({"error": str(e)}), 400
+  use_proxy = data.get("use_proxy") is True
+  if use_proxy and not proxy_url():
+    return jsonify({"error": PROXY_UNSUPPORTED}), 400
   job_id = uuid.uuid4().hex
   jobs[job_id] = {"status": "running", "processed": 0, "total": 0, "failed": 0,
                   "sheet_url": sheet_url, "message": ""}
-  threading.Thread(target=_worker, args=(job_id, sheet_url, formula), daemon=True).start()
+  threading.Thread(target=_worker, args=(job_id, sheet_url, formula, use_proxy), daemon=True).start()
   return jsonify({"job_id": job_id})
 
 

@@ -9,7 +9,12 @@
     body { font-family: system-ui, sans-serif; max-width: 760px; margin: 60px auto; padding: 0 16px; color: #222; }
     h1 { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
     h1 img { width: 48px; height: 48px; }
-    .formula { border: 1px solid #ddd; border-radius: 8px; padding: 16px 18px; margin-bottom: 32px; background: #fafbfc; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: 16px 18px; background: #fafbfc; }
+    .section { margin-bottom: 32px; }
+    .proxy { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 16px; }
+    .proxy label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .proxy input[type=radio] { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+    .field-error { margin-top: 8px; font-size: 15px; }
     .formula-title { font-weight: 600; margin-bottom: 12px; }
     .formula-expr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 16px; }
     .formula-expr input { width: 80px; padding: 8px 10px; font-size: 16px; text-align: center; box-sizing: border-box;
@@ -43,7 +48,15 @@
     {% endfor %}
   </select>
   {% endmacro %}
-  <div class="formula">
+  <div class="section">
+    <div class="box proxy">
+      <span class="formula-title" style="margin: 0">Dùng proxy:</span>
+      <label><input type="radio" name="proxy" value="no" checked>Không</label>
+      <label><input type="radio" name="proxy" value="yes">Có</label>
+    </div>
+    <div id="proxy-error" class="error field-error" hidden>{{ proxy_unsupported }}</div>
+  </div>
+  <div class="box section">
     <div class="formula-title">Công thức tính điểm:</div>
     <div class="formula-expr">
       <span>score =</span>
@@ -64,6 +77,20 @@
 const btn = document.getElementById("run");
 const input = document.getElementById("url");
 const statusEl = document.getElementById("status");
+const proxyErrorEl = document.getElementById("proxy-error");
+const PROXY_AVAILABLE = {{ proxy_available | tojson }};
+
+function useProxy() {
+  return document.querySelector('input[name="proxy"]:checked').value === "yes";
+}
+
+// Chọn "Có" mà server chưa cấu hình proxy -> báo ngay dưới khung
+function checkProxy() {
+  const ok = !useProxy() || PROXY_AVAILABLE;
+  proxyErrorEl.hidden = ok;
+  return ok;
+}
+document.querySelectorAll('input[name="proxy"]').forEach(r => r.addEventListener("change", checkProxy));
 
 function shortLink(url) {
   const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
@@ -102,6 +129,7 @@ async function poll(jobId) {
 }
 
 btn.addEventListener("click", async () => {
+  if (!checkProxy()) { show(""); return; }
   const sheetUrl = input.value.trim();
   if (!sheetUrl) { show("Vui lòng nhập URL Google Sheet", "error"); return; }
   const weights = {};
@@ -117,7 +145,7 @@ btn.addEventListener("click", async () => {
     const res = await fetch("/api/run", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({sheet_url: sheetUrl, formula}),
+      body: JSON.stringify({sheet_url: sheetUrl, formula, use_proxy: useProxy()}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);

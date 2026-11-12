@@ -54,7 +54,7 @@ def _rename_to_run_time(ws):
     log.warning("Không đổi được tên trang tính thành '%s': %s", title, e)
 
 
-def run_job(sheet_url, formula, job):
+def run_job(sheet_url, formula, use_proxy, job):
   """Đọc link theo batch, cào song song, ghi kết quả từng batch lên sheet. Cập nhật tiến độ vào `job`."""
   cols = CONFIG["sheet"]["columns"]
   first_row = CONFIG["sheet"]["header_row"] + 1
@@ -75,7 +75,7 @@ def run_job(sheet_url, formula, job):
         if link:
           rows.append((row_num, link))
 
-      results = pool.map(lambda r: fetch_post_stats(r[1]), rows)
+      results = pool.map(lambda r: fetch_post_stats(r[1], use_proxy), rows)
 
       updates = []
       for (row_num, link), stats in zip(rows, results):
