@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FB Post Engagement</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 60px auto; padding: 0 16px; color: #222; }
+    h1 { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    h1 img { width: 48px; height: 48px; }
+    .formula { border: 1px solid #ddd; border-radius: 8px; padding: 16px 18px; margin-bottom: 32px; background: #fafbfc; }
+    .formula-title { font-weight: 600; margin-bottom: 12px; }
+    .formula-expr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 16px; }
+    .formula-expr input { width: 80px; padding: 8px 10px; font-size: 16px; text-align: center; box-sizing: border-box;
+                          border: 1px solid #bbb; border-radius: 6px; }
+    /* Phép tính: kiểu "pill" màu xanh để phân biệt rõ với ô nhập hệ số (viền xám, nền trắng) */
+    /* appearance: none: bỏ phần vẽ mặc định của OS (gây viền răng cưa khi bo tròn), tự vẽ mũi tên bằng SVG */
+    .formula-expr select { appearance: none; -webkit-appearance: none;
+                           padding: 7px 30px 7px 14px; margin: 0 6px; font-size: 18px; font-weight: 700; cursor: pointer;
+                           color: #1877f2; background-color: #e7f0fd; border: 2px solid #1877f2; border-radius: 10px;
+                           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%231877f2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+                           background-repeat: no-repeat; background-position: right 10px center; }
+    .formula-expr select:focus { outline: none; box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.25); }
+    .formula-expr select option { color: #222; background: #fff; font-weight: 400; }
+    .row { display: flex; gap: 10px; }
+    #url { flex: 1; padding: 12px 14px; font-size: 16px; min-height: 48px; box-sizing: border-box;
+            border: 1px solid #bbb; border-radius: 6px; }
+    button { padding: 0 24px; font-size: 16px; min-height: 48px; border: none; border-radius: 6px;
+             background: #1877f2; color: #fff; cursor: pointer; }
+    button:disabled { background: #8bb4ec; cursor: default; }
+    #status { margin-top: 20px; font-size: 16px; }
+    .error { color: #c62828; }
+    .success { color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <h1><img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">FB Post Engagement</h1>
+  {% macro op_select(id, selected) %}
+  <select id="{{ id }}">
+    {% for value, label in [("+", "+"), ("-", "−"), ("*", "×"), ("/", "÷")] %}
+    <option value="{{ value }}" {% if value == selected %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% endmacro %}
+  <div class="formula">
+    <div class="formula-title">Công thức tính điểm:</div>
+    <div class="formula-expr">
+      <span>score =</span>
+      <input id="w-react" type="number" step="any" value="{{ score.weights.react }}"><span>× react</span>
+      {{ op_select("op1", score.operators[0]) }}
+      <input id="w-comment" type="number" step="any" value="{{ score.weights.comment }}"><span>× comment</span>
+      {{ op_select("op2", score.operators[1]) }}
+      <input id="w-share" type="number" step="any" value="{{ score.weights.share }}"><span>× share</span>
+    </div>
+  </div>
+  <div class="row">
+    <input id="url" type="url" placeholder="Dán URL Google Sheet vào đây">
+    <button id="run">Chạy</button>
+  </div>
+  <div id="status"></div>
+
+<script>
+const btn = document.getElementById("run");
+const input = document.getElementById("url");
+const statusEl = document.getElementById("status");
+
+function shortLink(url) {
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (!m) return url;
+  const id = m[1];
+  return "docs.google.com/…/d/" + (id.length > 12 ? id.slice(0, 6) + "…" + id.slice(-4) : id);
+}
+
+function show(html, cls) {
+  statusEl.className = cls || "";
+  statusEl.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function poll(jobId) {
+  const res = await fetch("/api/status/" + jobId);
+  const job = await res.json();
+  if (job.status === "running") {
+    show("Đang thực hiện..." + (job.total ? ` (${job.processed}/${job.total})` : ""));
+    setTimeout(() => poll(jobId), 2000);
+    return;
+  }
+  btn.disabled = false;
+  if (job.status === "done") {
+    const a = `<a href="${escapeHtml(job.sheet_url)}" target="_blank" rel="noopener">${escapeHtml(shortLink(job.sheet_url))}</a>`;
+    const failed = job.failed ? `<br><span class="error">Không lấy được ${job.failed} bài viết.</span>` : "";
+    show(`Thành công<br>Kết quả: ${a}${failed}`, "success");
+  } else {
+    show("Lỗi: " + escapeHtml(job.message || job.error || "không xác định"), "error");
+  }
+}
+
+btn.addEventListener("click", async () => {
+  const sheetUrl = input.value.trim();
+  if (!sheetUrl) { show("Vui lòng nhập URL Google Sheet", "error"); return; }
+  const weights = {};
+  for (const key of ["react", "comment", "share"]) {
+    const v = document.getElementById("w-" + key).value.trim();
+    if (v === "" || !isFinite(Number(v))) { show(`Vui lòng nhập hệ số hợp lệ cho ${key}`, "error"); return; }
+    weights[key] = Number(v);
+  }
+  const formula = {weights, operators: [document.getElementById("op1").value, document.getElementById("op2").value]};
+  btn.disabled = true;
+  show("Đang thực hiện...");
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({sheet_url: sheetUrl, formula}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    poll(data.job_id);
+  } catch (e) {
+    btn.disabled = false;
+    show("Lỗi: " + escapeHtml(e.message), "error");
+  }
+});
+</script>
+</body>
+</html>

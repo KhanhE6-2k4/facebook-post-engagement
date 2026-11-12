@@ -1,0 +1,20 @@
+# Secret
+.env
+.env.*
+!.env.example
+credential*.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+
+# Output sinh ra khi chạy thử logic trích xuất thông tin bài viết (react, cmt, share)
+debug_htmls/
+facebook_results.json
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

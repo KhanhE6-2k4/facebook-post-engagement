@@ -1,0 +1,34 @@
+# Cấu hình hay thay đổi. Sửa file này rồi khởi động lại app.
+
+sheet:
+  header_row: 1            # dữ liệu bắt đầu từ dòng header_row + 1
+  # Cột tác giả, link, điểm đặt tùy ý; riêng react/comment/share phải liền nhau theo đúng thứ tự đó
+  columns: {author: A, link: B, react: C, comment: D, share: E, score: F}
+  # Mỗi lần chạy, đổi tên trang tính thành thời điểm chạy (cú pháp strftime).
+  # Mặc định: "14h30 12-11-2026" (Giờ-Ngày-Tháng-Năm). Chuẩn ISO: "%Y-%m-%d %Hh%M"
+  title_format: "%Hh%M %d-%m-%Y"
+  timezone: Asia/Ho_Chi_Minh   # server deploy thường chạy giờ UTC nên phải chỉ rõ
+
+score:
+  # Giá trị MẶC ĐỊNH của khung công thức trên web (người dùng sửa được trước khi chạy):
+  # score = weights.react x react [operators[0]] weights.comment x comment [operators[1]] weights.share x share
+  # Mỗi lần chạy, cột Điểm được ghi đè bằng công thức sheet tương ứng, vd =1*C2+2*D2+3*E2
+  weights: {react: 1, comment: 2, share: 3}
+  operators: ["+", "+"]    # mỗi phép là một trong: + - * /
+
+batch:
+  size: 10                 # số dòng đọc + ghi mỗi batch
+
+workers:
+  n_workers: 2             # số luồng chạy song song
+
+rate_limit:
+  min_delay_sec: 2         # nghỉ ngẫu nhiên [min, max] giây sau mỗi request
+  max_delay_sec: 4
+  max_requests_per_minute: 15   # tối đa request/phút, toàn cục (mọi batch, mọi job)
+  max_concurrent_requests: 2    # tối đa request gần như đồng thời, toàn cục
+
+request:
+  timeout_sec: 8
+  retries: 2               # số lần thử lại khi lỗi
+  impersonate: chrome120
